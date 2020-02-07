@@ -582,6 +582,8 @@ Resources:
         StorageDescriptor:
           OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
           Columns:
+          - Name: host
+            Type: string
           - Name: uri
             Type: string
           - Name: status

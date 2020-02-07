@@ -1,11 +1,15 @@
+/**
+ MIT License
+ Copyright (c) 2020 Grzegorz Nittner
+ */
 exports.config = [
     {
         name: "cloudfront",
         type: "cloudfront",
         source: "cloudfront_raw",
         target: "cloudfront_search",
-        path: "/cloudfront/search",
-        aggregationPath: "/cloudfront/aggregated"
+        path: "/cloudfronts/search",
+        aggregationPath: "/cloudfronts/aggregated"
     },
     {
         name: "s3buckets",
