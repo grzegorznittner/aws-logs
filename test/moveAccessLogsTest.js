@@ -9,7 +9,7 @@ describe("analytics move access logs function - createCopyParams tests", functio
     const output = createCopyParams(sourceBucket, sourceKey, targetBucket);
     assert.equal(output.CopySource, sourceBucket + "/" + sourceKey);
     assert.equal(output.Bucket, targetBucket);
-    assert.equal(output.Key, "cloudfront/raw/year=2019/month=12/day=23/hour=04/E2RM06AWPLPG4A.2019-12-23-04.ee0a91d6.gz");
+    assert.equal(output.Key, "cloudfronts/raw/year=2019/month=12/day=23/hour=04/E2RM06AWPLPG4A.2019-12-23-04.ee0a91d6.gz");
   });
 
   it("cloudfront logs 2", function() {
@@ -19,7 +19,7 @@ describe("analytics move access logs function - createCopyParams tests", functio
     const output = createCopyParams(sourceBucket, sourceKey, targetBucket);
     assert.equal(output.CopySource, sourceBucket + "/" + sourceKey);
     assert.equal(output.Bucket, targetBucket);
-    assert.equal(output.Key, "cloudfront/raw/year=2019/month=11/day=25/hour=05/E2MB6G0UQ7QSIX.2019-11-25-05.1f5f36ff.gz");
+    assert.equal(output.Key, "cloudfronts/raw/year=2019/month=11/day=25/hour=05/E2MB6G0UQ7QSIX.2019-11-25-05.1f5f36ff.gz");
   });
   
   it("cloudfront logs 3", function() {
@@ -29,7 +29,7 @@ describe("analytics move access logs function - createCopyParams tests", functio
     const output = createCopyParams(sourceBucket, sourceKey, targetBucket);
     assert.equal(output.CopySource, sourceBucket + "/" + sourceKey);
     assert.equal(output.Bucket, targetBucket);
-    assert.equal(output.Key, "cloudfront/raw/year=2019/month=12/day=11/hour=09/EW0CYG3RXMS96.2019-12-11-09.cdcf4ab4.gz");
+    assert.equal(output.Key, "cloudfronts/raw/year=2019/month=12/day=11/hour=09/EW0CYG3RXMS96.2019-12-11-09.cdcf4ab4.gz");
   });
   
   it("cloudfront logs 4", function() {
@@ -39,7 +39,7 @@ describe("analytics move access logs function - createCopyParams tests", functio
     const output = createCopyParams(sourceBucket, sourceKey, targetBucket);
     assert.equal(output.CopySource, sourceBucket + "/" + sourceKey);
     assert.equal(output.Bucket, targetBucket);
-    assert.equal(output.Key, "cloudfront/raw/year=2019/month=11/day=14/hour=19/E2NJ3QYW5Z28DZ.2019-11-14-19.c1d8d31e.gz");
+    assert.equal(output.Key, "cloudfronts/raw/year=2019/month=11/day=14/hour=19/E2NJ3QYW5Z28DZ.2019-11-14-19.c1d8d31e.gz");
   });
   
   it("s3 bucket access logs 1", function() {

@@ -59,7 +59,7 @@ exports.createCopyParams = (sourceBucket, sourceKey, targetBucket) => {
 function handleCloudFrontLogs(m, regex) {
   console.log(`handleCloudFrontLogs`);
   printMatches(m, regex);
-  return `cloudfront/raw/year=${m[2]}/month=${m[3]}/day=${m[4]}/hour=${m[5]}/${m[1]}.${m[2]}-${m[3]}-${m[4]}-${m[5]}.${m[6]}`;
+  return `cloudfronts/raw/year=${m[2]}/month=${m[3]}/day=${m[4]}/hour=${m[5]}/${m[1]}.${m[2]}-${m[3]}-${m[4]}-${m[5]}.${m[6]}`;
 }
 
 function handleS3AccessLogs(m, regex) {
