@@ -1,5 +1,5 @@
-var { createCopyParams }  = require("../lambdas/moveAccessLogs");
-var assert = require("assert");
+const {createCopyParams} = require("../lambdas/moveAccessLogs");
+const assert = require("assert");
 
 describe("analytics move access logs function - createCopyParams tests", function() {
   it("cloudfront logs 1", function() {

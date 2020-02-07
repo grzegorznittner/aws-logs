@@ -1,0 +1,1053 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  RawLogsBucketName:
+    Type: String
+    Default: 'aws-raw-logs'
+    ConstraintDescription: '[a-z0-9\-]+/'
+    Description: S3 bucket name for raw logs
+  PartitionedLogsBucketName: 
+    Type: String
+    Default: 'aws-partitioned-logs'
+    ConstraintDescription: '[a-z0-9\-]+/'
+    Description: S3 bucket name for partitioned logs
+  SearchOptimizedLogsBucketName: 
+    Type: String
+    Default: 'aws-logs'
+    ConstraintDescription: '[a-z0-9\-]+/'
+    Description: S3 bucket name for partitioned and parquet formatted logs
+  DatabaseName: 
+    Type: String
+    Default: 'aws-logs-db'
+    ConstraintDescription: '[A-Za-z0-9\_]+'
+    Description: Name of the AWS Glue database
+
+Resources:
+
+  RawLogsBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    DependsOn:
+      - ProcessingLambdaPermission
+      - PartitionedLogsBucket
+    Properties:
+      BucketName: !Ref RawLogsBucketName
+      BucketEncryption: 
+        ServerSideEncryptionConfiguration:
+        -
+          ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      AccessControl: "LogDeliveryWrite"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: TRUE
+        BlockPublicPolicy: TRUE
+        IgnorePublicAcls: TRUE
+        RestrictPublicBuckets: TRUE
+      LoggingConfiguration:
+        DestinationBucketName: !Sub '${PartitionedLogsBucketName}'
+        LogFilePrefix: "analytics-access-logs/"
+      LifecycleConfiguration:
+        Rules:
+          - Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 365
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt MoveNewAccessLogsFn.Arn
+
+  ProcessingLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref MoveNewAccessLogsFn
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub 'arn:aws:s3:::${RawLogsBucketName}'
+      SourceAccount: !Ref AWS::AccountId
+
+
+  PartitionedLogsBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Ref PartitionedLogsBucketName
+      BucketEncryption: 
+        ServerSideEncryptionConfiguration: 
+        - 
+          ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      AccessControl: "LogDeliveryWrite"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: TRUE
+        BlockPublicPolicy: TRUE
+        IgnorePublicAcls: TRUE
+        RestrictPublicBuckets: TRUE
+      LoggingConfiguration:
+        LogFilePrefix: "analytics-access-logs/"
+      LifecycleConfiguration:
+        Rules:
+          - Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 365
+
+  SearchOptimizedLogsBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    DependsOn:
+      - PartitionedLogsBucket
+    Properties:
+      BucketName: !Ref SearchOptimizedLogsBucketName
+      BucketEncryption: 
+        ServerSideEncryptionConfiguration: 
+        - 
+          ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: TRUE
+        BlockPublicPolicy: TRUE
+        IgnorePublicAcls: TRUE
+        RestrictPublicBuckets: TRUE
+      LoggingConfiguration:
+        DestinationBucketName: !Sub '${PartitionedLogsBucketName}'
+        LogFilePrefix: "analytics-access-logs/"
+      LifecycleConfiguration:
+        Rules:
+          - Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 365
+
+
+  MoveNewAccessLogsFn:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Description: 'Move logs function'
+      CodeUri: ../lambdas/
+      Handler: moveAccessLogs.handler
+      Runtime: nodejs12.x
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:DeleteObject
+            Resource: !Sub "arn:aws:s3:::${RawLogsBucketName}/*"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${PartitionedLogsBucketName}/*"
+      Environment:
+        Variables:
+          TARGET_BUCKET: !Ref PartitionedLogsBucketName
+
+
+  TransformPartFn:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Description: 'Transform logs function'
+      CodeUri: ../lambdas/
+      Handler: transformPartition.handler
+      Runtime: nodejs12.x
+      Timeout: 900
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - athena:StartQueryExecution
+              - athena:GetQueryExecution
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetBucketLocation
+            Resource: !Sub "arn:aws:s3:::${PartitionedLogsBucketName}"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${PartitionedLogsBucketName}/*"
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:ListObjects
+            Resource: !Sub "arn:aws:s3:::${SearchOptimizedLogsBucketName}"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:DeleteObject
+              - s3:HeadObject
+            Resource: !Sub "arn:aws:s3:::${SearchOptimizedLogsBucketName}/*"
+          - Effect: Allow
+            Action:
+              - glue:CreatePartition
+              - glue:GetDatabase
+              - glue:GetTable
+              - glue:BatchCreatePartition
+              - glue:GetPartition
+              - glue:GetPartitions
+              - glue:CreateTable
+              - glue:BatchDeletePartition
+              - glue:DeleteTable
+              - glue:DeletePartition
+            Resource: '*'
+      Environment:
+        Variables:
+          DATABASE: !Ref AwsLogsDatabase
+          ATHENA_QUERY_RESULTS_LOCATION: !Sub "s3://${PartitionedLogsBucketName}/athena-query-results"
+          ATHENA_RESULTS_LOCATION: !Sub "s3://${SearchOptimizedLogsBucketName}"
+      Events:
+        HourlyEvt:
+          Type: Schedule
+          Properties:
+            Schedule: cron(1 * * * ? *)
+
+  AggregateLogPartFn:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Description: 'Aggregate logs function'
+      CodeUri: ../lambdas/
+      Handler: aggregation.handler
+      Runtime: nodejs12.x
+      Timeout: 900
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - athena:StartQueryExecution
+              - athena:GetQueryExecution
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${PartitionedLogsBucketName}/*"
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:ListObjects
+            Resource: !Sub "arn:aws:s3:::${SearchOptimizedLogsBucketName}"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:DeleteObject
+              - s3:HeadObject
+            Resource: !Sub "arn:aws:s3:::${SearchOptimizedLogsBucketName}/*"
+          - Effect: Allow
+            Action:
+              - glue:CreatePartition
+              - glue:GetDatabase
+              - glue:GetTable
+              - glue:BatchCreatePartition
+              - glue:GetPartition
+              - glue:GetPartitions
+              - glue:CreateTable
+              - glue:BatchDeletePartition
+              - glue:DeleteTable
+              - glue:DeletePartition
+            Resource: '*'
+      Environment:
+        Variables:
+          DATABASE: !Ref AwsLogsDatabase
+          ATHENA_QUERY_RESULTS_LOCATION: !Sub "s3://${PartitionedLogsBucketName}/athena-query-results"
+          ATHENA_RESULTS_LOCATION: !Sub "s3://${SearchOptimizedLogsBucketName}"
+      Events:
+        HourlyEvt:
+          Type: Schedule
+          Properties:
+            Schedule: cron(5 * * * ? *)
+
+  CreatePartFn:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Description: 'Create partitions function'
+      CodeUri: ../lambdas/
+      Handler: createPartitions.handler
+      Runtime: nodejs12.x
+      Timeout: 5
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - athena:StartQueryExecution
+              - athena:GetQueryExecution
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - glue:CreatePartition
+              - glue:GetDatabase
+              - glue:GetTable
+              - glue:BatchCreatePartition
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${PartitionedLogsBucketName}/*"
+      Environment:
+        Variables:
+          DATABASE: !Ref AwsLogsDatabase
+          ATHENA_QUERY_RESULTS_LOCATION: !Sub "s3://${PartitionedLogsBucketName}/athena-query-results"
+      Events:
+        HourlyEvt:
+          Type: Schedule
+          Properties:
+            Schedule: cron(55 * * * ? *)
+
+  CleanupFn:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Description: '1:30am cleanup function'
+      CodeUri: ../lambdas/
+      Handler: cleanup.handler
+      Runtime: nodejs12.x
+      Timeout: 30
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:ListObjects
+            Resource: !Sub "arn:aws:s3:::${PartitionedLogsBucketName}"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:DeleteObject
+              - s3:HeadObject
+            Resource: !Sub "arn:aws:s3:::${PartitionedLogsBucketName}/*"
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:ListObjects
+            Resource: !Sub "arn:aws:s3:::${SearchOptimizedLogsBucketName}"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:DeleteObject
+              - s3:HeadObject
+            Resource: !Sub "arn:aws:s3:::${SearchOptimizedLogsBucketName}/*"
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:ListObjects
+            Resource: !Sub "arn:aws:s3:::sunset-cloudfront-logs"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:DeleteObject
+              - s3:HeadObject
+            Resource: !Sub "arn:aws:s3:::sunset-cloudfront-logs/*"
+          - Effect: Allow
+            Action:
+              - glue:CreatePartition
+              - glue:GetDatabase
+              - glue:GetTable
+              - glue:GetTables
+              - glue:BatchCreatePartition
+              - glue:GetPartition
+              - glue:GetPartitions
+              - glue:CreateTable
+              - glue:BatchDeletePartition
+              - glue:DeleteTable
+              - glue:DeletePartition
+            Resource: '*'
+      Environment:
+        Variables:
+          DATABASE: !Ref AwsLogsDatabase
+          ATHENA_QUERY_RESULTS_LOCATION: !Sub "s3://${PartitionedLogsBucketName}/athena-query-results"
+          PARTITIONED_STORAGE: !Sub "${PartitionedLogsBucketName}"
+          OPTIMIZED_STORAGE: !Sub "${SearchOptimizedLogsBucketName}"
+      Events:
+        HourlyEvt:
+          Type: Schedule
+          Properties:
+            Schedule: cron(30 1 * * ? *)
+
+# Glue Resources
+# Database
+
+  AwsLogsDatabase:
+    Type: 'AWS::Glue::Database'
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Sub "${DatabaseName}"
+
+##############################
+# CloudFront Access Logs Glue tables
+##############################
+  RawCloudFrontLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AwsLogsDatabase
+      TableInput:
+        Name: 'cloudfront_raw'
+        Description: 'Raw CloudFront access logs - partitioned'
+        TableType: EXTERNAL_TABLE
+        Parameters: { "skip.header.line.count": "2" }
+        PartitionKeys:
+        - Name: year
+          Type: string
+        - Name: month
+          Type: string
+        - Name: day
+          Type: string
+        - Name: hour
+          Type: string
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Columns:
+          - Name: date
+            Type: date
+          - Name: time
+            Type: string
+          - Name: location
+            Type: string
+          - Name: bytes
+            Type: bigint
+          - Name: requestip
+            Type: string
+          - Name: method
+            Type: string
+          - Name: host
+            Type: string
+          - Name: uri
+            Type: string
+          - Name: status
+            Type: int
+          - Name: referrer
+            Type: string
+          - Name: useragent
+            Type: string
+          - Name: querystring
+            Type: string
+          - Name: cookie
+            Type: string
+          - Name: resulttype
+            Type: string
+          - Name: requestid
+            Type: string
+          - Name: hostheader
+            Type: string
+          - Name: requestprotocol
+            Type: string
+          - Name: requestbytes
+            Type: bigint
+          - Name: timetaken
+            Type: float
+          - Name: xforwardedfor
+            Type: string
+          - Name: sslprotocol
+            Type: string
+          - Name: sslcipher
+            Type: string
+          - Name: responseresulttype
+            Type: string
+          - Name: httpversion
+            Type: string
+          - Name: filestatus
+            Type: string
+          - Name: encryptedfields
+            Type: int
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: !Sub "s3://${PartitionedLogsBucketName}/cloudfront"
+          SerdeInfo:
+            Parameters:
+              field.delim": "\t"
+              serialization.format: "\t"
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+  
+  SearchCloudFrontLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AwsLogsDatabase
+      TableInput:
+        Name: 'cloudfront_search'
+        Description: 'Parquet format and partitioned CloudFront access logs'
+        TableType: EXTERNAL_TABLE
+        Parameters: { 'has_encrypted_data': 'false', 'parquet.compression': 'SNAPPY' }
+        PartitionKeys:
+        - Name: year
+          Type: string
+        - Name: month
+          Type: string
+        - Name: day
+          Type: string
+        - Name: hour
+          Type: string
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          Columns:
+          - Name: date
+            Type: date
+          - Name: time
+            Type: string
+          - Name: location
+            Type: string
+          - Name: bytes
+            Type: bigint
+          - Name: requestip
+            Type: string
+          - Name: method
+            Type: string
+          - Name: host
+            Type: string
+          - Name: uri
+            Type: string
+          - Name: status
+            Type: int
+          - Name: referrer
+            Type: string
+          - Name: useragent
+            Type: string
+          - Name: querystring
+            Type: string
+          - Name: cookie
+            Type: string
+          - Name: resulttype
+            Type: string
+          - Name: requestid
+            Type: string
+          - Name: hostheader
+            Type: string
+          - Name: requestprotocol
+            Type: string
+          - Name: requestbytes
+            Type: bigint
+          - Name: timetaken
+            Type: float
+          - Name: xforwardedfor
+            Type: string
+          - Name: sslprotocol
+            Type: string
+          - Name: sslcipher
+            Type: string
+          - Name: responseresulttype
+            Type: string
+          - Name: httpversion
+            Type: string
+          - Name: filestatus
+            Type: string
+          - Name: encryptedfields
+            Type: int
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
+          Location: !Sub "s3://${SearchOptimizedLogsBucketName}/cloudfront/search"
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
+
+  AggregatedCloudFrontLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AwsLogsDatabase
+      TableInput:
+        Name: 'cloudfront_aggregated'
+        Description: 'Parquet formatted and aggregated CloudFront access logs'
+        TableType: EXTERNAL_TABLE
+        Parameters: { 'has_encrypted_data': 'false', 'parquet.compression': 'SNAPPY' }
+        PartitionKeys:
+        - Name: year
+          Type: string
+        - Name: month
+          Type: string
+        - Name: day
+          Type: string
+        - Name: hour
+          Type: string
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          Columns:
+          - Name: uri
+            Type: string
+          - Name: status
+            Type: int
+          - Name: count
+            Type: bigint
+          - Name: total_bytes
+            Type: bigint
+          - Name: min_time
+            Type: double
+          - Name: max_time
+            Type: double
+          - Name: avg_time
+            Type: double
+          - Name: stddev_time
+            Type: double
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
+          Location: !Sub "s3://${SearchOptimizedLogsBucketName}/cloudfront/aggregated"
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
+
+
+##############################
+# S3 Bucket Access Logs Glue tables
+##############################
+  RawS3AccessLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AwsLogsDatabase
+      TableInput:
+        Name: 's3buckets_raw'
+        Description: 'Raw S3 buckets access logs - partitioned'
+        TableType: EXTERNAL_TABLE
+        PartitionKeys:
+        - Name: year
+          Type: string
+        - Name: month
+          Type: string
+        - Name: day
+          Type: string
+        - Name: hour
+          Type: string
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Columns:
+          - Name: bucketowner
+            Type: string
+          - Name: bucket
+            Type: string
+          - Name: requestdatetime
+            Type: string
+          - Name: remoteip
+            Type: string
+          - Name: requester
+            Type: string
+          - Name: requestid
+            Type: string
+          - Name: operation
+            Type: string
+          - Name: key
+            Type: string
+          - Name: requesturi_operation
+            Type: string
+          - Name: requesturi_key
+            Type: string
+          - Name: requesturi_httpprotoversion
+            Type: string
+          - Name: httpstatus
+            Type: string
+          - Name: errorcode
+            Type: string
+          - Name: bytessent
+            Type: bigint
+          - Name: objectsize
+            Type: bigint
+          - Name: totaltime
+            Type: string
+          - Name: turnaroundtime
+            Type: string
+          - Name: referrer
+            Type: string
+          - Name: useragent
+            Type: string
+          - Name: versionid
+            Type: string
+          - Name: hostid
+            Type: string
+          - Name: sigv
+            Type: string
+          - Name: ciphersuite
+            Type: string
+          - Name: authtype
+            Type: string
+          - Name: endpoint
+            Type: string
+          - Name: tlsversion
+            Type: string
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: !Sub "s3://${PartitionedLogsBucketName}/s3buckets"
+          SerdeInfo:
+            Parameters:
+              serialization.format: '1'
+              input.regex: "([^ ]*) ([^ ]*) \\[(.*?)\\] ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) \\\"([^ ]*) ([^ ]*) (- |[^ ]*)\\\" (-|[0-9]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) (\"[^\"]*\") ([^ ]*)(?: ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*))?.*$"
+            SerializationLibrary: org.apache.hadoop.hive.serde2.RegexSerDe
+  
+  SearchS3AccessLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AwsLogsDatabase
+      TableInput:
+        Name: 's3buckets_search'
+        Description: 'Parquet formatted S3 buckets access logs'
+        TableType: EXTERNAL_TABLE
+        Parameters: { 'has_encrypted_data': 'false', 'parquet.compression': 'SNAPPY' }
+        PartitionKeys:
+        - Name: year
+          Type: string
+        - Name: month
+          Type: string
+        - Name: day
+          Type: string
+        - Name: hour
+          Type: string
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          Columns:
+          - Name: bucketowner
+            Type: string
+          - Name: bucket
+            Type: string
+          - Name: requestdatetime
+            Type: string
+          - Name: remoteip
+            Type: string
+          - Name: requester
+            Type: string
+          - Name: requestid
+            Type: string
+          - Name: operation
+            Type: string
+          - Name: key
+            Type: string
+          - Name: requesturi_operation
+            Type: string
+          - Name: requesturi_key
+            Type: string
+          - Name: requesturi_httpprotoversion
+            Type: string
+          - Name: httpstatus
+            Type: string
+          - Name: errorcode
+            Type: string
+          - Name: bytessent
+            Type: bigint
+          - Name: objectsize
+            Type: bigint
+          - Name: totaltime
+            Type: string
+          - Name: turnaroundtime
+            Type: string
+          - Name: referrer
+            Type: string
+          - Name: useragent
+            Type: string
+          - Name: versionid
+            Type: string
+          - Name: hostid
+            Type: string
+          - Name: sigv
+            Type: string
+          - Name: ciphersuite
+            Type: string
+          - Name: authtype
+            Type: string
+          - Name: endpoint
+            Type: string
+          - Name: tlsversion
+            Type: string
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
+          Location: !Sub "s3://${SearchOptimizedLogsBucketName}/s3buckets/search"
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
+
+  AggregatedS3AccessLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AwsLogsDatabase
+      TableInput:
+        Name: 's3buckets_aggregated'
+        Description: 'Parquet formatted and aggregated browser access logs'
+        TableType: EXTERNAL_TABLE
+        Parameters: { 'has_encrypted_data': 'false', 'parquet.compression': 'SNAPPY' }
+        PartitionKeys:
+        - Name: year
+          Type: string
+        - Name: month
+          Type: string
+        - Name: day
+          Type: string
+        - Name: hour
+          Type: string
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          Columns:
+          - Name: bucket_name
+            Type: string
+          - Name: status
+            Type: string
+          - Name: count
+            Type: bigint
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
+          Location: !Sub "s3://${SearchOptimizedLogsBucketName}/s3buckets/aggregated"
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
+
+##############################
+# CloudTrail Glue tables
+##############################
+  RawCloudTrailLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AwsLogsDatabase
+      TableInput:
+        Name: 'cloudtrail_raw'
+        Description: 'Raw CloudTrail logs - partitioned'
+        TableType: EXTERNAL_TABLE
+        PartitionKeys:
+        - Name: year
+          Type: string
+        - Name: month
+          Type: string
+        - Name: day
+          Type: string
+        - Name: hour
+          Type: string
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Columns:
+          - Name: eventversion
+            Type: string
+          - Name: useridentity
+            Type: struct<type:string,principalid:string,arn:string,accountid:string,invokedby:string,accesskeyid:string,username:string,sessioncontext:struct<attributes:struct<mfaauthenticated:string,creationdate:string>,sessionissuer:struct<type:string,principalid:string,arn:string,accountid:string,username:string>>>
+          - Name: eventtime
+            Type: string
+          - Name: eventsource
+            Type: string
+          - Name: eventname
+            Type: string
+          - Name: awsregion
+            Type: string
+          - Name: sourceipaddress
+            Type: string
+          - Name: useragent
+            Type: string
+          - Name: errorcode
+            Type: string
+          - Name: errormessage
+            Type: string
+          - Name: requestparameters
+            Type: string
+          - Name: responseelements
+            Type: string
+          - Name: additionaleventdata
+            Type: string
+          - Name: requestid
+            Type: string
+          - Name: eventid
+            Type: string
+          - Name: resources
+            Type: array<struct<arn:string,accountid:string,type:string>>
+          - Name: eventtype
+            Type: string
+          - Name: apiversion
+            Type: string
+          - Name: readonly
+            Type: string
+          - Name: recipientaccountid
+            Type: string
+          - Name: serviceeventdetails
+            Type: string
+          - Name: sharedeventid
+            Type: string
+          - Name: vpcendpointid
+            Type: string
+          InputFormat: com.amazon.emr.cloudtrail.CloudTrailInputFormat
+          Location: !Sub "s3://${PartitionedLogsBucketName}/cloudtrail/trail"
+          SerdeInfo:
+            SerializationLibrary: com.amazon.emr.hive.serde.CloudTrailSerde
+  
+  SearchCloudTrailLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AwsLogsDatabase
+      TableInput:
+        Name: 'cloudtrail_search'
+        Description: 'Parquet formatted CloudTrail logs'
+        TableType: EXTERNAL_TABLE
+        Parameters: { 'has_encrypted_data': 'false', 'parquet.compression': 'SNAPPY' }
+        PartitionKeys:
+        - Name: year
+          Type: string
+        - Name: month
+          Type: string
+        - Name: day
+          Type: string
+        - Name: hour
+          Type: string
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          Columns:
+          - Name: eventversion
+            Type: string
+          - Name: useridentity
+            Type: struct<type:string,principalid:string,arn:string,accountid:string,invokedby:string,accesskeyid:string,username:string,sessioncontext:struct<attributes:struct<mfaauthenticated:string,creationdate:string>,sessionisuser:struct<type:string,principalid:string,arn:string,accountid:string,username:string>>>
+          - Name: eventtime
+            Type: string
+          - Name: eventsource
+            Type: string
+          - Name: eventname
+            Type: string
+          - Name: awsregion
+            Type: string
+          - Name: sourceipaddress
+            Type: string
+          - Name: useragent
+            Type: string
+          - Name: errorcode
+            Type: string
+          - Name: errormessage
+            Type: string
+          - Name: requestparameters
+            Type: string
+          - Name: responseelements
+            Type: string
+          - Name: additionaleventdata
+            Type: string
+          - Name: requestid
+            Type: string
+          - Name: eventid
+            Type: string
+          - Name: resources
+            Type: array<struct<arn:string,accountid:string,type:string>>
+          - Name: eventtype
+            Type: string
+          - Name: apiversion
+            Type: string
+          - Name: readonly
+            Type: string
+          - Name: recipientaccountid
+            Type: string
+          - Name: serviceeventdetails
+            Type: string
+          - Name: sharedeventid
+            Type: string
+          - Name: vpcendpointid
+            Type: string
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
+          Location: !Sub "s3://${SearchOptimizedLogsBucketName}/cloudtrail/trail"
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
+
+  AggregatedCloudTrailLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AwsLogsDatabase
+      TableInput:
+        Name: 'cloudtrail_aggregated'
+        Description: 'Parquet formatted and aggregated CloudTrail logs'
+        TableType: EXTERNAL_TABLE
+        Parameters: { 'has_encrypted_data': 'false', 'parquet.compression': 'SNAPPY' }
+        PartitionKeys:
+        - Name: year
+          Type: string
+        - Name: month
+          Type: string
+        - Name: day
+          Type: string
+        - Name: hour
+          Type: string
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          Columns:
+          - Name: eventsource
+            Type: string
+          - Name: awsregion
+            Type: string
+          - Name: count
+            Type: bigint
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
+          Location: !Sub "s3://${SearchOptimizedLogsBucketName}/cloudtrail/aggregated"
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
+
+
+##############################
+# AWS Logs S3 Buckets Access Logs Glue tables
+##############################
+  RawAWSLogsS3AccessLogsTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref AwsLogsDatabase
+      TableInput:
+        Name: 'aws_logs_s3buckets_raw'
+        Description: 'Raw S3 buckets access logs for AWS Logs buckets - partitioned'
+        TableType: EXTERNAL_TABLE
+        StorageDescriptor:
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          Columns:
+          - Name: bucketowner
+            Type: string
+          - Name: bucket
+            Type: string
+          - Name: requestdatetime
+            Type: string
+          - Name: remoteip
+            Type: string
+          - Name: requester
+            Type: string
+          - Name: requestid
+            Type: string
+          - Name: operation
+            Type: string
+          - Name: key
+            Type: string
+          - Name: requesturi_operation
+            Type: string
+          - Name: requesturi_key
+            Type: string
+          - Name: requesturi_httpprotoversion
+            Type: string
+          - Name: httpstatus
+            Type: string
+          - Name: errorcode
+            Type: string
+          - Name: bytessent
+            Type: bigint
+          - Name: objectsize
+            Type: bigint
+          - Name: totaltime
+            Type: string
+          - Name: turnaroundtime
+            Type: string
+          - Name: referrer
+            Type: string
+          - Name: useragent
+            Type: string
+          - Name: versionid
+            Type: string
+          - Name: hostid
+            Type: string
+          - Name: sigv
+            Type: string
+          - Name: ciphersuite
+            Type: string
+          - Name: authtype
+            Type: string
+          - Name: endpoint
+            Type: string
+          - Name: tlsversion
+            Type: string
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: !Sub "s3://${PartitionedLogsBucketName}/analytics-access-logs"
+          SerdeInfo:
+            Parameters:
+              serialization.format: '1'
+              input.regex: "([^ ]*) ([^ ]*) \\[(.*?)\\] ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) \\\"([^ ]*) ([^ ]*) (- |[^ ]*)\\\" (-|[0-9]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) (\"[^\"]*\") ([^ ]*)(?: ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*))?.*$"
+            SerializationLibrary: org.apache.hadoop.hive.serde2.RegexSerDe
