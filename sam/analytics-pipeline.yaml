@@ -469,7 +469,7 @@ Resources:
           - Name: encryptedfields
             Type: int
           InputFormat: org.apache.hadoop.mapred.TextInputFormat
-          Location: !Sub "s3://${PartitionedLogsBucketName}/cloudfront"
+          Location: !Sub "s3://${PartitionedLogsBucketName}/cloudfronts/raw"
           SerdeInfo:
             Parameters:
               field.delim": "\t"
@@ -551,7 +551,7 @@ Resources:
           - Name: encryptedfields
             Type: int
           InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
-          Location: !Sub "s3://${SearchOptimizedLogsBucketName}/cloudfront/search"
+          Location: !Sub "s3://${SearchOptimizedLogsBucketName}/cloudfronts/search"
           SerdeInfo:
             SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
 
@@ -594,7 +594,7 @@ Resources:
           - Name: stddev_time
             Type: double
           InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
-          Location: !Sub "s3://${SearchOptimizedLogsBucketName}/cloudfront/aggregated"
+          Location: !Sub "s3://${SearchOptimizedLogsBucketName}/cloudfronts/aggregated"
           SerdeInfo:
             SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
 
@@ -676,7 +676,7 @@ Resources:
           - Name: tlsversion
             Type: string
           InputFormat: org.apache.hadoop.mapred.TextInputFormat
-          Location: !Sub "s3://${PartitionedLogsBucketName}/s3buckets"
+          Location: !Sub "s3://${PartitionedLogsBucketName}/s3buckets/raw"
           SerdeInfo:
             Parameters:
               serialization.format: '1'
