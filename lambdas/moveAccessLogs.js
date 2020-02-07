@@ -1,3 +1,11 @@
+/**
+ MIT License
+ Copyright (c) 2020 Grzegorz Nittner
+
+ Based on https://github.com/aws-samples/amazon-cloudfront-access-logs-queries
+ thanks to https://github.com/steffeng
+ */
+
 const aws = require('aws-sdk');
 const s3 = new aws.S3({ apiVersion: '2006-03-01' });
 

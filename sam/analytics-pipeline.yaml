@@ -1,3 +1,8 @@
+# MIT License
+# Copyright (c) 2020 Grzegorz Nittner
+#
+# Based on https://github.com/aws-samples/amazon-cloudfront-access-logs-queries
+# thanks to https://github.com/steffeng
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 

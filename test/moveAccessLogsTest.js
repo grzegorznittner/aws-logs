@@ -1,3 +1,11 @@
+/**
+MIT License
+Copyright (c) 2020 Grzegorz Nittner
+
+Based on https://github.com/aws-samples/amazon-cloudfront-access-logs-queries
+thanks to https://github.com/steffeng
+*/
+
 const {createCopyParams} = require("../lambdas/moveAccessLogs");
 const assert = require("assert");
 
