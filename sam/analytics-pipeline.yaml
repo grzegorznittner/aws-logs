@@ -11,7 +11,7 @@ Parameters:
     Type: String
     Default: 'aws-raw-logs'
     ConstraintDescription: '[a-z0-9\-]+/'
-    Description: S3 bucket name for raw logs
+    Description: S3 bucket name for raw logs - this bucket should remain empty all the time
   PartitionedLogsBucketName: 
     Type: String
     Default: 'aws-partitioned-logs'
