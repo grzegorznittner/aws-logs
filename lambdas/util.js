@@ -6,13 +6,12 @@
  thanks to https://github.com/steffeng
  */
 const aws = require('aws-sdk');
-const athena = new aws.Athena({ apiVersion: '2017-05-18' });
-const glue = new aws.Glue({ apiVersion: '2017-03-31' });
-var s3 = new aws.S3({ apiVersion: '2006-03-01' });
+const athena = new aws.Athena({apiVersion: '2017-05-18'});
+const glue = new aws.Glue({apiVersion: '2017-03-31'});
+var s3 = new aws.S3({apiVersion: '2006-03-01'});
 
 // s3 URL of the query results (without trailing slash)
 const athenaQueryResultsLocation = process.env.ATHENA_QUERY_RESULTS_LOCATION;
-
 
 
 async function waitForQueryExecution(query, queryExecutionId) {
@@ -54,41 +53,41 @@ exports.deleteGlueTable = (database, tableName) => {
 
 exports.listGlueTables = (database, filterExpression) => {
     var params = {
-      DatabaseName: database,
-      Expression: filterExpression
+        DatabaseName: database,
+        Expression: filterExpression
     };
     return glue.getTables(params).promise();
 };
 
 exports.deleteS3Folder = (bucketName, folder, callback) => {
-  var params = {
-    Bucket: bucketName,
-    Prefix: folder
-  };
+    var params = {
+        Bucket: bucketName,
+        Prefix: folder
+    };
 
-  s3.listObjects(params, function(err, data) {
-    if (err) return callback(err);
+    s3.listObjects(params, function (err, data) {
+        if (err) return callback(err);
 
-    const totalFiles = data.Contents.length;
-    if (totalFiles == 0) callback();
+        const totalFiles = data.Contents.length;
+        if (totalFiles === 0) callback();
 
-    exports.log(`Deleting ${totalFiles} files from s3://${bucketName}/${folder}`);
-    params = {Bucket: bucketName};
-    params.Delete = {Objects:[]};
+        exports.log(`Deleting ${totalFiles} files from s3://${bucketName}/${folder}`);
+        params = {Bucket: bucketName};
+        params.Delete = {Objects: []};
 
-    data.Contents.forEach(function(content) {
-      params.Delete.Objects.push({Key: content.Key});
+        data.Contents.forEach(function (content) {
+            params.Delete.Objects.push({Key: content.Key});
+        });
+
+        s3.deleteObjects(params, function (err, data) {
+            if (err) return callback(err);
+            if (totalFiles >= 1000)
+                exports.deleteS3Folder(bucketName, folder, callback);
+            else callback();
+        });
     });
-
-    s3.deleteObjects(params, function(err, data) {
-      if (err) return callback(err);
-      if(totalFiles >= 1000)
-        exports.deleteS3Folder(bucketName, folder, callback);
-      else callback();
-    });
-  });
 };
 
 exports.log = (message) => {
-    console.log(new Date().toISOString()+" "+message);
+    console.log(new Date().toISOString() + " " + message);
 };
