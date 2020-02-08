@@ -349,19 +349,6 @@ Resources:
             Resource: !Sub "arn:aws:s3:::${SearchOptimizedLogsBucketName}/*"
           - Effect: Allow
             Action:
-              - s3:ListBucket
-              - s3:GetBucketLocation
-              - s3:ListObjects
-            Resource: !Sub "arn:aws:s3:::sunset-cloudfront-logs"
-          - Effect: Allow
-            Action:
-              - s3:PutObject
-              - s3:GetObject
-              - s3:DeleteObject
-              - s3:HeadObject
-            Resource: !Sub "arn:aws:s3:::sunset-cloudfront-logs/*"
-          - Effect: Allow
-            Action:
               - glue:CreatePartition
               - glue:GetDatabase
               - glue:GetTable
