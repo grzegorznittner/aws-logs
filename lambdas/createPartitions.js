@@ -18,10 +18,10 @@ exports.createPartitions = async (time) => {
     return new Promise(async function (resolve, reject) {
         try {
             const partitionHour = time;
-            var year = partitionHour.getUTCFullYear();
-            var month = (partitionHour.getUTCMonth() + 1).toString().padStart(2, '0');
-            var day = partitionHour.getUTCDate().toString().padStart(2, '0');
-            var hour = partitionHour.getUTCHours().toString().padStart(2, '0');
+            const year = partitionHour.getUTCFullYear();
+            const month = (partitionHour.getUTCMonth() + 1).toString().padStart(2, '0');
+            const day = partitionHour.getUTCDate().toString().padStart(2, '0');
+            const hour = partitionHour.getUTCHours().toString().padStart(2, '0');
             util.log('Creating Partitions', {year, month, day, hour});
 
             const partitionsPlan = exports.createPartitionsPlan(year, month, day, hour);
@@ -37,7 +37,6 @@ let runPartitioning = async (transformPlan) => {
     util.log('Start of runPartitioning');
 
     return new Promise(async function (resolve, reject) {
-
         const dropPartitions = transformPlan.map(async transform => {
             return util.runQueryAndWait(transform.dropPartitionStatement);
         });
@@ -53,6 +52,7 @@ let runPartitioning = async (transformPlan) => {
         util.log('End of create partitions');
 
         util.log('End of runPartitioning');
+        resolve();
     });
 };
 

@@ -8,7 +8,7 @@
 const aws = require('aws-sdk');
 const athena = new aws.Athena({apiVersion: '2017-05-18'});
 const glue = new aws.Glue({apiVersion: '2017-03-31'});
-var s3 = new aws.S3({apiVersion: '2006-03-01'});
+const s3 = new aws.S3({apiVersion: '2006-03-01'});
 
 // s3 URL of the query results (without trailing slash)
 const athenaQueryResultsLocation = process.env.ATHENA_QUERY_RESULTS_LOCATION;
@@ -88,6 +88,32 @@ exports.deleteS3Folder = (bucketName, folder, callback) => {
     });
 };
 
+exports.deleteS3Folders = (map) => {
+    return map.map(async transform => {
+        return new Promise(resolve => {
+            exports.deleteS3Folder(transform.s3Bucket, transform.s3DataPath, resolve);
+        }).then(err => {
+            util.log(err !== undefined ?
+                `Error while deleting ${transform.s3Bucket}/${transform.s3DataPath} : ` + err :
+                `Files deleted from ${transform.s3Bucket}/${transform.s3DataPath}`);
+        });
+    });
+};
+
+exports.dropPartition = (map) => {
+    return map.map(async transform => {
+        return util.runQueryAndWait(transform.dropPartitionStatement);
+    });
+};
+
+exports.getPartitionDetails = (time) => {
+    const partitionHour = time;
+    const year = partitionHour.getUTCFullYear();
+    const month = (partitionHour.getUTCMonth() + 1).toString().padStart(2, '0');
+    const day = partitionHour.getUTCDate().toString().padStart(2, '0');
+    const hour = partitionHour.getUTCHours().toString().padStart(2, '0');
+    return [year, month, day, hour];
+};
 
 exports.log = (message) => {
     console.log(new Date().toISOString() + " " + message);

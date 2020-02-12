@@ -1,7 +1,7 @@
 {
-	"name": "AWSLogs",
+	"name": "aws-logs-serverless",
 	"version": "1.0.0",
-	"description": "AWS Logs solution",
+	"description": "AWS Logs solution using Athena and Lambdas",
 	"devDependencies": {
 		"mocha": "5.2.0",
 		"chai": "^4.2.0"

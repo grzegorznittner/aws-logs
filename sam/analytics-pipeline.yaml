@@ -129,6 +129,7 @@ Resources:
   MoveNewAccessLogsFn:
     Type: 'AWS::Serverless::Function'
     Properties:
+      FunctionName: AWSLogs-MoveLogFiles
       Description: 'Move logs function'
       CodeUri: ../lambdas/
       Handler: moveAccessLogs.handler
@@ -154,6 +155,7 @@ Resources:
   TransformPartFn:
     Type: 'AWS::Serverless::Function'
     Properties:
+      FunctionName: AWSLogs-TransformLogFiles
       Description: 'Transform logs function'
       CodeUri: ../lambdas/
       Handler: transformPartition.handler
@@ -212,11 +214,12 @@ Resources:
         HourlyEvt:
           Type: Schedule
           Properties:
-            Schedule: cron(1 * * * ? *)
+            Schedule: cron(20 * * * ? *)
 
   AggregateLogPartFn:
     Type: 'AWS::Serverless::Function'
     Properties:
+      FunctionName: AWSLogs-AggregateLogFiles
       Description: 'Aggregate logs function'
       CodeUri: ../lambdas/
       Handler: aggregation.handler
@@ -270,11 +273,12 @@ Resources:
         HourlyEvt:
           Type: Schedule
           Properties:
-            Schedule: cron(5 * * * ? *)
+            Schedule: cron(25 * * * ? *)
 
   CreatePartFn:
     Type: 'AWS::Serverless::Function'
     Properties:
+      FunctionName: AWSLogs-CreatePartitions
       Description: 'Create partitions function'
       CodeUri: ../lambdas/
       Handler: createPartitions.handler
@@ -313,6 +317,7 @@ Resources:
   CleanupFn:
     Type: 'AWS::Serverless::Function'
     Properties:
+      FunctionName: AWSLogs-CleanupActivities
       Description: '1:30am cleanup function'
       CodeUri: ../lambdas/
       Handler: cleanup.handler

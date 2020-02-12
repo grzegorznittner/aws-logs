@@ -19,12 +19,7 @@ exports.handler = async (event, context, callback) => {
 exports.aggregateData = async (time) => {
     return new Promise(async function (resolve, reject) {
         try {
-            const partitionHour = time;
-            const year = partitionHour.getUTCFullYear();
-            const month = (partitionHour.getUTCMonth() + 1).toString().padStart(2, '0');
-            const day = partitionHour.getUTCDate().toString().padStart(2, '0');
-            const hour = partitionHour.getUTCHours().toString().padStart(2, '0');
-
+            const [year, month, day, hour] = util.getPartitionDetails(time);
             const aggregationPlan = exports.prepareAggregationQueries(year, month, day, hour);
             await runAggregation(aggregationPlan);
             resolve();
@@ -38,17 +33,7 @@ exports.aggregateData = async (time) => {
 let runAggregation = async (aggregationPlan) => {
     util.log('Start of runAggregation');
     return new Promise(async function (resolve, reject) {
-
-        const deleteS3Data = aggregationPlan.map(async transform => {
-            return new Promise(resolve => {
-                util.deleteS3Folder(transform.s3Bucket, transform.s3DataPath, resolve);
-            }).then(err => {
-                util.log(err !== undefined ?
-                    `Error while deleting ${transform.s3Bucket}/${transform.s3DataPath} : ` + err :
-                    `Files deleted from ${transform.s3Bucket}/${transform.s3DataPath}`);
-            });
-        });
-        await Promise.all(deleteS3Data)
+        await Promise.all(util.deleteS3Folders(aggregationPlan))
             .catch(err => util.log(err));
         util.log('End of deleting S3 data');
 
@@ -59,13 +44,8 @@ let runAggregation = async (aggregationPlan) => {
             .catch(err => util.log(err));
         util.log('End of aggregation');
 
-        const dropPartitions = aggregationPlan.map(async transform => {
-            return util.runQueryAndWait(transform.dropPartitionStatement);
-        });
-        await Promise.all(dropPartitions)
-            .catch(err => {
-                util.log(err);
-            });
+        await Promise.all(util.dropPartition(aggregationPlan))
+            .catch(err => util.log(err));
         util.log('End of drop partitions');
 
         const createPartitions = aggregationPlan.map(async transform => {

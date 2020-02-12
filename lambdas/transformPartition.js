@@ -18,12 +18,7 @@ exports.handler = async (event, context, callback) => {
 exports.transformData = async (time) => {
     return new Promise(async function (resolve, reject) {
         try {
-            const partitionHour = time;
-            const year = partitionHour.getUTCFullYear();
-            const month = (partitionHour.getUTCMonth() + 1).toString().padStart(2, '0');
-            const day = partitionHour.getUTCDate().toString().padStart(2, '0');
-            const hour = partitionHour.getUTCHours().toString().padStart(2, '0');
-
+            const [year, month, day, hour] = util.getPartitionDetails(time);
             // get definitions of all transformations
             const partitionLogSetsPlan = exports.createDataTransformations(year, month, day, hour);
             // execute transformations via AWS Athena
@@ -41,17 +36,7 @@ let runDataTransformation = async (transformPlan) => {
     util.log('Start of runDataTransformation');
 
     return new Promise(async function (resolve, reject) {
-
-        const deleteS3Data = transformPlan.map(async transform => {
-            return new Promise(resolve => {
-                util.deleteS3Folder(transform.s3Bucket, transform.s3DataPath, resolve);
-            }).then(err => {
-                util.log(err !== undefined ?
-                    `Error while deleting ${transform.s3Bucket}/${transform.s3DataPath} : ` + err :
-                    `Files deleted from ${transform.s3Bucket}/${transform.s3DataPath}`);
-            });
-        });
-        await Promise.all(deleteS3Data)
+        await Promise.all(util.deleteS3Folders(transformPlan))
             .catch(err => util.log(err));
         util.log('End of deleting S3 data');
 
@@ -62,13 +47,8 @@ let runDataTransformation = async (transformPlan) => {
             .catch(err => util.log(err));
         util.log('End of ctas');
 
-        const dropPartitions = transformPlan.map(async transform => {
-            return util.runQueryAndWait(transform.dropPartitionStatement);
-        });
-        await Promise.all(dropPartitions)
-            .catch(err => {
-                util.log(err);
-            });
+        await Promise.all(util.dropPartition(transformPlan))
+            .catch(err => util.log(err));
         util.log('End of drop partitions');
 
         const createPartitions = transformPlan.map(async transform => {

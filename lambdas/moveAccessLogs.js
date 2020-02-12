@@ -28,7 +28,7 @@ exports.handler = async (event, context, callback) => {
             console.log(`Deleted ${sourceKey}.`);
             return del;
         }, function (reason) {
-            var error = new Error(`Error while copying s3://${bucket}/${sourceKey}: ${reason}`);
+            const error = new Error(`Error while copying s3://${bucket}/${sourceKey}: ${reason}`);
             callback(error);
         });
     });
@@ -92,8 +92,9 @@ function handleCloudTrailDigestLogs(sourceKey, m, regex) {
 
 function handleUnrecognized(sourceKey) {
     console.log(`Found unrecognized: ${sourceKey}`);
+    const [year, month, day, hour] = util.getPartitionDetails(Date.now());
     const filename = sourceKey.split('/').slice(-1).pop();
-    return `unrecognized/${filename}`;
+    return `unrecognized/${year}-${month}-${day}-${hour}_${filename}`;
 }
 
 function printMatches(m, regex) {
