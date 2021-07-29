@@ -1,0 +1,8 @@
+{
+"@type": "did:sov:BzCbsNYhMrjHiqZDTUASHg;spec/present-proof/1.0/request-presentation", "@id": "8726862b-884f-
+4b3f-a96c-2fe416e081c9","~service": {"recipientKeys": ["8HH5gYEeNc3z7PYXmd54d4x6qAfCNrqQqEB3nS7Zfu7K"],"routingKeys": [],"serviceEndpoint": "https://example.com/endpoint"},"~thread": {"thid": "98fd8d72-80f6-4419-abc2-c65ea39d0f38"},
+"request_presentations~attach": [{
+"@id": "libindy-request-presentation-0",
+"mime-type": "application/json",
+"data":{"base64":"eyJuYW1lIjogIlByb29mIHJlcXVlc3QiLCAibm9uX3Jldm9rZWQiOiB7InRvIjogMTYyMzc2MzA3NH0sICJyZXF1ZXN0ZWRfcHJlZGljYXRlcyI6IHt9LCAibm9uY2UiOiAiMTIzNDU2Nzg5MCIsICJyZXF1ZXN0ZWRfYXR0cmlidXRlcyI6IHsiQmFzaXMtSUQiOiB7Im5hbWVzIjogWyJmaXJzdE5hbWUiLCAiZmFtaWx5TmFtZSIsICJhZGRyZXNzU3RyZWV0IiwgImFkZHJlc3NaaXBDb2RlIiwgImFkZHJlc3NDb3VudHJ5IiwgImFkZHJlc3NDaXR5IiwgImRhdGVPZkV4cGlyeSIsICJkYXRlT2ZCaXJ0aCJdLCAibm9uX3Jldm9rZWQiOiB7InRvIjogMTYyMzc2MzA3NH0sICJyZXN0cmljdGlvbnMiOiBbeyJjcmVkX2RlZl9pZCI6ICJTWFFlNDVja1prVDd4UEZzNFhHa2dLOjM6Q0w6NDM6QmFzaXMtSUQgUHJldmlldyJ9XX19LCAidmVyc2lvbiI6ICIxLjAifQ=="}}]
+}
