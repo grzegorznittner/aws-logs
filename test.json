@@ -12,10 +12,10 @@
   ],
   "~service": {
     "recipientKeys": [
-      "5qEWakfNASX1FF9qfRM7yhuPo6yoJGZKmdGaErg11fTd"
+      "47TycWXT1C6UQAuKaDnqvmViY4sqPjTqGuyQcYryomzK"
     ],
     "routingKeys": null,
-    "serviceEndpoint": "http://ec2-18-184-140-31.eu-central-1.compute.amazonaws.com"
+    "serviceEndpoint": "http://ec2-18-184-140-31.eu-central-1.compute.amazonaws.com:10000"
   },
   "~thread": {
     "thid": "23d49095-88f0-4306-8977-ee8839766baf",
