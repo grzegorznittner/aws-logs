@@ -10,7 +10,7 @@
 		"test": "mocha --recursive"
 	},
 	"dependencies": {
-		"aws-sdk": "^2.597.0",
+		"aws-sdk": "^2.814.0",
 		"npm": "^6.13.7"
 	}
 }
